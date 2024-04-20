@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime
 from dotenv import load_dotenv
 import os
+import sqlite3
 
 load_dotenv()
 
@@ -11,6 +12,9 @@ TOKEN = os.environ.get("TOKEN")
 intents = discord.Intents.all()
 intents.message_content = True
 client = discord.Client(intents=intents)
+conn = sqlite3.connect('bot_database.db')
+cur = conn.cursor()
+
 TEST = False
 
 @client.event
@@ -35,32 +39,36 @@ async def on_message(message):
         if message.content.startswith('!선택'):
             # 메시지가 '!선택'으로 시작하는 경우에만 실행
             channel = message.channel
-            members = channel.members
-            # channel_name = '문제선택자'
-            channel_name = '테스트선택자'
             guild = message.guild
-            choice_channel = discord.utils.get(guild.channels, name = channel_name)
-            async for msg in choice_channel.history(limit=1):
-                if msg.content == '.':
-                    filtered_members = [member.id for member in members if not member.bot]
-                else:
-                    filtered_members = list(map(int, msg.content.split(', ')))
-                    
-            # 메시지가 온 채널을 얻음
-            # 채널에 있는 모든 멤버를 얻음
-            # filtered_members = [member for member in members if not member.bot]
-            # "지켜보고있다"라는 아이디를 가진 멤버를 제외한 나머지 멤버들을 필터링
-            if filtered_members:
-                selected_member = random.choice(filtered_members)
-                # 필터링된 멤버 중에서 무작위로 한 명을 선택
-                await channel.send(f'선택된 멤버: {guild.get_member(selected_member).mention}')
-                # filtered_members.remove(selected_member)
-                # if filtered_members:
-                #     await choice_channel.send((', ').join(map(str, filtered_members)))
-                # else:
-                #     await choice_channel.send('.')
-            else:
-                await channel.send("선택할 수 있는 멤버가 없습니다.")
+
+            # db에서 member_data 읽어옴
+            cur.execute('SELECT * FROM member_data')
+
+            rows = cur.fetchall()
+            # 선택이 아직 안된 멤버 불러오기
+            not_chosen = [row for row in rows if row[2] == 0 and row[0] != message.author.id]
+            
+            # 더이상 뽑을 사람이 없다면
+            if len(not_chosen) == 0:
+                # DB의 chosen 초기화
+                cur.execute('UPDATE member_data SET chosen = False')
+
+                # 뽑을 사람 다시 선택
+                cur.execute('SELECT * FROM member_data')
+                rows = cur.fetchall()
+                not_chosen = [row for row in rows if row[2] == 0 and row[0] != message.author.id]
+            
+            # random하게 선택
+            selected_member = random.choice(not_chosen)
+            member_id, member_name, _ = selected_member
+
+            await channel.send(f'선택된 멤버: {guild.get_member(member_id).mention}, {member_name}')
+            cur.execute('UPDATE member_data SET chosen = True where id = ?', (member_id, ))
+            cur.execute('SELECT * FROM member_data')
+            rows = cur.fetchall()
+            
+            # db에 저장
+            conn.commit()
         if message.content.startswith('!풀이현황'):
             # 메시지가 '!최근댓글'로 시작하는 경우에만 실행
             channel_name = '1일-1코테'  # 여기에 원하는 채널 이름을 넣어주세요
@@ -92,32 +100,36 @@ async def on_message(message):
         if message.content.startswith('!선택'):
             # 메시지가 '!선택'으로 시작하는 경우에만 실행
             channel = message.channel
-            members = channel.members
-            channel_name = '문제선택자'
-            # channel_name = '테스트선택자'
             guild = message.guild
-            choice_channel = discord.utils.get(guild.channels, name = channel_name)
-            async for msg in choice_channel.history(limit=1):
-                if msg.content == '.':
-                    filtered_members = [member.id for member in members if not member.bot]
-                else:
-                    filtered_members = list(map(int, msg.content.split(', ')))
-                    
-            # 메시지가 온 채널을 얻음
-            # 채널에 있는 모든 멤버를 얻음
-            # filtered_members = [member for member in members if not member.bot]
-            # "지켜보고있다"라는 아이디를 가진 멤버를 제외한 나머지 멤버들을 필터링
-            if filtered_members:
-                selected_member = random.choice(filtered_members)
-                # 필터링된 멤버 중에서 무작위로 한 명을 선택
-                await channel.send(f'선택된 멤버: {guild.get_member(selected_member).mention}')
-                filtered_members.remove(selected_member)
-                if filtered_members:
-                    await choice_channel.send((', ').join(map(str, filtered_members)))
-                else:
-                    await choice_channel.send('.')
-            else:
-                await channel.send("선택할 수 있는 멤버가 없습니다.")
+
+            # db에서 member_data 읽어옴
+            cur.execute('SELECT * FROM member_data')
+
+            rows = cur.fetchall()
+            # 선택이 아직 안된 멤버 불러오기
+            not_chosen = [row for row in rows if row[2] == 0 and row[0] != message.author.id]
+            
+            # 더이상 뽑을 사람이 없다면
+            if len(not_chosen) == 0:
+                # DB의 chosen 초기화
+                cur.execute('UPDATE member_data SET chosen = False')
+
+                # 뽑을 사람 다시 선택
+                cur.execute('SELECT * FROM member_data')
+                rows = cur.fetchall()
+                not_chosen = [row for row in rows if row[2] == 0 and row[0] != message.author.id]
+            
+            # random하게 선택
+            selected_member = random.choice(not_chosen)
+            member_id, member_name, _ = selected_member
+
+            await channel.send(f'선택된 멤버: {guild.get_member(member_id).mention}, {member_name}')
+            cur.execute('UPDATE member_data SET chosen = True where id = ?', (member_id, ))
+            cur.execute('SELECT * FROM member_data')
+            rows = cur.fetchall()
+            
+            # db에 저장
+            conn.commit()
 
         if message.content.startswith('!풀이현황'):
             # 메시지가 '!최근댓글'로 시작하는 경우에만 실행
